@@ -51,6 +51,14 @@ var category_list = {};
 var selected_category = CATEGORIES_ALL;
 var setCategoryFilter = function() {};
 
+var TAGS_ALL = 1;
+var TAGS_UNTAGGED = 2;
+
+var tag_list = {};
+
+var selected_tag = TAGS_ALL;
+var setTagFilter = function() {};
+
 var selected_filter = getLocalStorageItem('selected_filter', 'all');
 var setFilter = function() {};
 var toggleFilterDisplay = function() {};
@@ -59,6 +67,11 @@ var loadSelectedCategory = function() {
     selected_category = getLocalStorageItem('selected_category', CATEGORIES_ALL);
 };
 loadSelectedCategory();
+
+var loadSelectedTag = function() {
+    selected_tag = getLocalStorageItem('selected_tag', TAGS_ALL);
+};
+loadSelectedTag();
 
 function genHash(string) {
     var hash = 0;
@@ -134,6 +147,14 @@ window.addEvent('load', function() {
         selected_category = hash;
         localStorage.setItem('selected_category', selected_category);
         highlightSelectedCategory();
+        if (typeof torrentsTable.tableBody != 'undefined')
+            updateMainData();
+    };
+
+    setTagFilter = function(hash) {
+        selected_tag = hash;
+        localStorage.setItem('selected_tag', selected_tag);
+        highlightSelectedTag();
         if (typeof torrentsTable.tableBody != 'undefined')
             updateMainData();
     };
@@ -259,8 +280,39 @@ window.addEvent('load', function() {
         return false;
     };
 
+    var removeTorrentFromTagList = function(hash) {
+        if (hash === null || hash === "")
+            return false;
+        var removed = false;
+        Object.each(tag_list, function(tag) {
+            if (Object.contains(tag.torrents, hash)) {
+                removed = true;
+                tag.torrents.splice(tag.torrents.indexOf(hash), 1);
+            }
+        });
+        return removed;
+    };
+
+    var addTorrentToTagList = function(torrent) {
+        removeTorrentFromTagList(torrent['hash']);
+        if (typeof torrent['tags'] === 'undefined')
+            return false;
+        if (torrent['tags'].length === 0) // No tags
+            return true;
+        var tags = torrent['tags'].split(', ');
+        var added = false;
+        Object.each(tags, function (tag) {
+            var tagHash = genHash(tag);
+            if (!Object.contains(tag_list[tagHash].torrents, torrent['hash'])) {
+                added = true;
+                tag_list[tagHash].torrents = tag_list[tagHash].torrents.combine([torrent['hash']]);
+            }
+        });
+        return added;
+    };
+
     var updateFilter = function(filter, filterTitle) {
-        $(filter + '_filter').firstChild.childNodes[1].nodeValue = filterTitle.replace('%1', torrentsTable.getFilteredTorrentsNumber(filter, CATEGORIES_ALL));
+        $(filter + '_filter').firstChild.childNodes[1].nodeValue = filterTitle.replace('%1', torrentsTable.getFilteredTorrentsNumber(filter, CATEGORIES_ALL, TAGS_ALL));
     };
 
     var updateFiltersList = function() {
@@ -330,6 +382,61 @@ window.addEvent('load', function() {
         }
     };
 
+    var updateTagList = function() {
+        var tagList = $('tagFilterList');
+        if (!tagList)
+            return;
+        tagList.empty();
+
+        var create_link = function(hash, text, count) {
+            var html = '<a href="#" onclick="setTagFilter(' + hash + ');return false;">'
+                + '<img src="images/qbt-theme/inode-directory.svg"/>'
+                + escapeHtml(text) + ' (' + count + ')' + '</a>';
+            var el = new Element('li', {
+                id: hash,
+                html: html
+            });
+            tagsFilterContextMenu.addTarget(el);
+            return el;
+        };
+
+        var all = torrentsTable.getRowIds().length;
+        var untagged = 0;
+        Object.each(torrentsTable.rows, function(row) {
+            if (row['full_data'].tags.length === 0)
+                untagged += 1;
+        });
+        tagList.appendChild(create_link(TAGS_ALL, 'QBT_TR(All)QBT_TR[CONTEXT=TagFilterModel]', all));
+        tagList.appendChild(create_link(TAGS_UNTAGGED, 'QBT_TR(Untagged)QBT_TR[CONTEXT=TagFilterModel]', untagged));
+
+        var sortedTags = [];
+        Object.each(tag_list, function(tag) {
+            sortedTags.push(tag.name);
+        });
+        sortedTags.sort();
+
+        Object.each(sortedTags, function(tagName) {
+            var tagHash = genHash(tagName);
+            var tagCount = tag_list[tagHash].torrents.length;
+            tagList.appendChild(create_link(tagHash, tagName, tagCount));
+        });
+
+        highlightSelectedTag();
+    };
+
+    var highlightSelectedTag = function() {
+        var tagList = $('tagFilterList');
+        if (!tagList)
+            return;
+        var childrens = tagList.childNodes;
+        for (var i = 0; i < childrens.length; ++i) {
+            if (childrens[i].id == selected_tag)
+                childrens[i].className = "selectedFilter";
+            else
+                childrens[i].className = "";
+        }
+    };
+
     var syncMainDataTimer;
     var syncMainData = function() {
         var url = new URI('api/v2/sync/maindata');
@@ -351,11 +458,13 @@ window.addEvent('load', function() {
                     clearTimeout(torrentsFilterInputTimer);
                     var torrentsTableSelectedRows;
                     var update_categories = false;
+                    var update_tags = false;
                     var full_update = (response['full_update'] === true);
                     if (full_update) {
                         torrentsTableSelectedRows = torrentsTable.selectedRowsIds();
                         torrentsTable.clear();
                         category_list = {};
+                        tag_list = {};
                     }
                     if (response['rid']) {
                         syncMainDataLastResponseId = response['rid'];
@@ -385,6 +494,25 @@ window.addEvent('load', function() {
                         });
                         update_categories = true;
                     }
+                    if (response['tags']) {
+                        for (var tag of response['tags']) {
+                            var tagHash = genHash(tag);
+                            if (!tag_list[tagHash]) {
+                                tag_list[tagHash] = {
+                                    name: tag,
+                                    torrents: []
+                                };
+                            }
+                        }
+                        update_tags = true;
+                    }
+                    if (response['tags_removed']) {
+                        response['tags_removed'].each(function(tag) {
+                            var tagHash = genHash(tag);
+                            delete tag_list[tagHash];
+                        });
+                        update_tags = true;
+                    }
                     if (response['torrents']) {
                         var updateTorrentList = false;
                         for (var key in response['torrents']) {
@@ -395,6 +523,8 @@ window.addEvent('load', function() {
                             torrentsTable.updateRowData(response['torrents'][key]);
                             if (addTorrentToCategoryList(response['torrents'][key]))
                                 update_categories = true;
+                            if (addTorrentToTagList(response['torrents'][key]))
+                                update_tags = true;
                             if (response['torrents'][key]['name'])
                                 updateTorrentList = true;
                         }
@@ -407,6 +537,8 @@ window.addEvent('load', function() {
                             torrentsTable.removeRow(hash);
                             removeTorrentFromCategoryList(hash);
                             update_categories = true; // Always to update All category
+                            removeTorrentFromTagList(hash);
+                            update_tags = true; // Always to update All tag
                         });
                     torrentsTable.updateTable(full_update);
                     torrentsTable.altRow();
@@ -420,6 +552,10 @@ window.addEvent('load', function() {
                     if (update_categories) {
                         updateCategoryList();
                         torrentsTableContextMenu.updateCategoriesSubMenu(category_list);
+                    }
+                    if (update_tags) {
+                        updateTagList();
+                        torrentsTableContextMenu.updateTagsSubMenu(tag_list);
                     }
 
                     if (full_update)

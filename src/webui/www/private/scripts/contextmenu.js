@@ -257,6 +257,7 @@ var TorrentsTableContextMenu = new Class({
         var all_are_super_seeding = true;
         var all_are_auto_tmm = true;
         var there_are_auto_tmm = false;
+        var tags_selection_state = Object.clone(tag_list);
 
         var h = torrentsTable.selectedRowsIds();
         h.each(function(item, index) {
@@ -291,6 +292,19 @@ var TorrentsTableContextMenu = new Class({
                 there_are_auto_tmm = true;
             else
                 all_are_auto_tmm = false;
+
+            var torrentTags = data['tags'].split(', ');
+            Object.each(tags_selection_state, function (tag) {
+                var contains = torrentTags.contains(tag.name);
+                if (tag.checked !== undefined && tag.checked != contains) {
+                    tag.indeterminate = true;
+                }
+                if (tag.checked === undefined) {
+                    tag.checked = contains;
+                } else {
+                    tag.checked = tag.checked && contains;
+                }
+            });
         });
 
         var show_seq_dl = true;
@@ -353,6 +367,13 @@ var TorrentsTableContextMenu = new Class({
             this.setItemChecked('AutoTorrentManagement', all_are_auto_tmm);
         }
 
+        var tagList = $('contextTagsList');
+        Object.each(tag_list, function (tag, tagHash) {
+            var checkbox = tagList.getElement('a[href=#Tag/' + tagHash + '] input[type=checkbox]');
+            var checkboxState = tags_selection_state[tagHash];
+            checkbox.indeterminate = checkboxState.indeterminate;
+            checkbox.checked = checkboxState.checked;
+        });
     },
 
     updateCategoriesSubMenu: function(category_list) {
@@ -383,6 +404,36 @@ var TorrentsTableContextMenu = new Class({
             }
             categoryList.appendChild(el);
         });
+    },
+
+    updateTagsSubMenu: function(tag_list) {
+        var tagList = $('contextTagsList');
+        tagList.empty();
+        tagList.appendChild(new Element('li', {
+            html: '<a href="javascript:torrentAddTagsFN();"><img src="images/qbt-theme/list-add.svg" alt="QBT_TR(Add...)QBT_TR[CONTEXT=TransferListWidget]"/> QBT_TR(Add...)QBT_TR[CONTEXT=TransferListWidget]</a>'
+        }));
+        tagList.appendChild(new Element('li', {
+            html: '<a href="javascript:torrentRemoveAllTagsFN();"><img src="images/qbt-theme/edit-clear.svg" alt="QBT_TR(Remove All)QBT_TR[CONTEXT=TransferListWidget]"/> QBT_TR(Remove All)QBT_TR[CONTEXT=TransferListWidget]</a>'
+        }));
+
+        var sortedTags = [];
+        Object.each(tag_list, function(tag) {
+            sortedTags.push(tag.name);
+        });
+        sortedTags.sort();
+
+        var first = true;
+        Object.each(sortedTags, function(tagName) {
+            var tagHash = genHash(tagName);
+            var el = new Element('li', {
+                html: '<a href="#Tag/' + tagHash + '" onclick="event.preventDefault(); torrentSetTagsFN(\'' + tagHash + '\', !event.currentTarget.getElement(\'input[type=checkbox]\').checked);"><input type="checkbox" onclick="event.preventDefault();"> ' + escapeHtml(tagName) + '</a>'
+            });
+            if (first) {
+                el.addClass('separator');
+                first = false;
+            }
+            tagList.appendChild(el);
+        });
     }
 });
 
@@ -397,6 +448,19 @@ var CategoriesFilterContextMenu = new Class({
         else {
             this.hideItem('EditCategory');
             this.hideItem('DeleteCategory');
+        }
+    }
+});
+
+var TagsFilterContextMenu = new Class({
+    Extends: ContextMenu,
+    updateMenuItems: function() {
+        var id = this.options.element.id;
+        if ((id != TAGS_ALL) && (id != TAGS_UNTAGGED)) {
+            this.showItem('DeleteTag');
+        }
+        else {
+            this.hideItem('DeleteTag');
         }
     }
 });

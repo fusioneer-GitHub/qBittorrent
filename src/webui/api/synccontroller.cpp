@@ -440,6 +440,14 @@ void SyncController::maindataAction()
 
     data["categories"] = categories;
 
+    QVariantList tags;
+    const auto &tagsList = session->tags();
+    for (auto it = tagsList.cbegin(); it != tagsList.cend(); ++it) {
+        tags << *it;
+    }
+
+    data["tags"] = tags;
+
     QVariantMap serverState = getTranserInfo();
     serverState[KEY_TRANSFER_FREESPACEONDISK] = getFreeDiskSpace();
     serverState[KEY_SYNC_MAINDATA_QUEUEING] = session->isQueueingSystemEnabled();

@@ -1038,3 +1038,64 @@ void TorrentsController::categoriesAction()
 
     setResult(categories);
 }
+
+void TorrentsController::setTagsAction()
+{
+    checkParams({"hashes", "tags", "isSet"});
+
+    const QStringList hashes {params()["hashes"].split('|')};
+    const QStringList tags {params()["tags"].split(',', QString::SkipEmptyParts)};
+    const bool isSet = parseBool(params()["isSet"], false);
+
+    for (auto it = tags.cbegin(); it != tags.cend(); ++it) {
+        const QString tag {(*it).trimmed()};
+        applyToTorrents(hashes, [tag, &isSet](BitTorrent::TorrentHandle *const torrent)
+        {
+            if (isSet) {
+                if (!torrent->hasTag(tag) && !torrent->addTag(tag))
+                    throw APIError(APIErrorType::Conflict, tr("Incorrect tag name"));
+            }
+            else {
+                if (torrent->hasTag(tag) && !torrent->removeTag(tag))
+                    throw APIError(APIErrorType::Conflict, tr("Incorrect tag name"));
+            }
+        });
+    }
+}
+
+void TorrentsController::createTagAction()
+{
+    checkParams({"tag"});
+
+    const QString tag {params()["tag"].trimmed()};
+
+    if (tag.isEmpty())
+        throw APIError(APIErrorType::BadParams, tr("Tag cannot be empty"));
+
+    if (!BitTorrent::Session::isValidTag(tag))
+        throw APIError(APIErrorType::Conflict, tr("Incorrect tag name"));
+
+    if (!BitTorrent::Session::instance()->addTag(tag))
+        throw APIError(APIErrorType::Conflict, tr("Unable to create tag"));
+}
+
+void TorrentsController::removeTagsAction()
+{
+    checkParams({"tags"});
+
+    const QStringList tags {params()["tags"].split(',', QString::SkipEmptyParts)};
+    for (const QString &tag : tags)
+        BitTorrent::Session::instance()->removeTag(tag);
+}
+
+void TorrentsController::removeAllTagsAction()
+{
+    checkParams({"hashes"});
+
+    const QStringList hashes {params()["hashes"].split('|')};
+
+    applyToTorrents(hashes, [](BitTorrent::TorrentHandle *const torrent)
+    {
+        torrent->removeAllTags();
+    });
+}

@@ -555,7 +555,7 @@ initializeWindows = function() {
     deleteUnusedCategoriesFN = function() {
         var categories = [];
         for (var hash in category_list) {
-            if (torrentsTable.getFilteredTorrentsNumber('all', hash) === 0)
+            if (torrentsTable.getFilteredTorrentsNumber('all', hash, TAGS_ALL) === 0)
                 categories.push(category_list[hash].name);
         }
         new Request({
@@ -569,7 +569,7 @@ initializeWindows = function() {
     };
 
     startTorrentsByCategoryFN = function(categoryHash) {
-        var hashes = torrentsTable.getFilteredTorrentsHashes('all', categoryHash);
+        var hashes = torrentsTable.getFilteredTorrentsHashes('all', categoryHash, TAGS_ALL);
         if (hashes.length) {
             new Request({
                 url: 'api/v2/torrents/resume',
@@ -583,7 +583,7 @@ initializeWindows = function() {
     };
 
     pauseTorrentsByCategoryFN = function(categoryHash) {
-        var hashes = torrentsTable.getFilteredTorrentsHashes('all', categoryHash);
+        var hashes = torrentsTable.getFilteredTorrentsHashes('all', categoryHash, TAGS_ALL);
         if (hashes.length) {
             new Request({
                 url: 'api/v2/torrents/pause',
@@ -597,7 +597,151 @@ initializeWindows = function() {
     };
 
     deleteTorrentsByCategoryFN = function(categoryHash) {
-        var hashes = torrentsTable.getFilteredTorrentsHashes('all', categoryHash);
+        var hashes = torrentsTable.getFilteredTorrentsHashes('all', categoryHash, TAGS_ALL);
+        if (hashes.length) {
+            new MochaUI.Window({
+                id: 'confirmDeletionPage',
+                title: "QBT_TR(Deletion confirmation)QBT_TR[CONTEXT=confirmDeletionDlg]",
+                loadMethod: 'iframe',
+                contentURL: 'confirmdeletion.html?hashes=' + hashes.join("|"),
+                scrollbars: false,
+                resizable: false,
+                maximizable: false,
+                padding: 10,
+                width: 424,
+                height: 140
+            });
+            updateMainData();
+        }
+    };
+
+    torrentAddTagsFN = function() {
+        var action = "set";
+        var hashes = torrentsTable.selectedRowsIds();
+        if (hashes.length) {
+            new MochaUI.Window({
+                id: 'newTagPage',
+                title: "QBT_TR(Add Tags)QBT_TR[CONTEXT=TransferListWidget]",
+                loadMethod: 'iframe',
+                contentURL: 'newtag.html?action=' + action + '&hashes=' + hashes.join('|'),
+                scrollbars: false,
+                resizable: false,
+                maximizable: false,
+                paddingVertical: 0,
+                paddingHorizontal: 0,
+                width: 250,
+                height: 100
+            });
+        }
+    };
+
+    torrentSetTagsFN = function(tagHash, isSet) {
+        var tagName = '';
+        if (tagHash != 0)
+            tagName = tag_list[tagHash].name;
+        var hashes = torrentsTable.selectedRowsIds();
+        if (hashes.length) {
+            new Request({
+                url: ('api/v2/torrents/setTags'),
+                method: 'post',
+                data: {
+                    hashes: hashes.join("|"),
+                    tags: tagName,
+                    isSet,
+                }
+            }).send();
+        }
+    };
+
+    torrentRemoveAllTagsFN = function() {
+        var hashes = torrentsTable.selectedRowsIds();
+        if (hashes.length) {
+            new Request({
+                url: ('api/v2/torrents/removeAllTags'),
+                method: 'post',
+                data: {
+                    hashes: hashes.join("|"),
+                }
+            }).send();
+        }
+    };
+
+    createTagFN = function() {
+        var action = "create";
+        new MochaUI.Window({
+            id: 'newTagPage',
+            title: "QBT_TR(New Tag)QBT_TR[CONTEXT=TagFilterWidget]",
+            loadMethod: 'iframe',
+            contentURL: 'newtag.html?action=' + action,
+            scrollbars: false,
+            resizable: false,
+            maximizable: false,
+            paddingVertical: 0,
+            paddingHorizontal: 0,
+            width: 250,
+            height: 100
+        });
+        updateMainData();
+    };
+
+    removeTagFN = function(tagHash) {
+        var tagName = tag_list[tagHash].name;
+        new Request({
+            url: 'api/v2/torrents/removeTags',
+            method: 'post',
+            data: {
+                tags: tagName
+            }
+        }).send();
+        setTagFilter(TAGS_ALL);
+    };
+
+    deleteUnusedTagsFN = function() {
+        var tags = [];
+        for (var hash in tag_list) {
+            if (torrentsTable.getFilteredTorrentsNumber('all', CATEGORIES_ALL, hash) === 0)
+                tags.push(tag_list[hash].name);
+        }
+        new Request({
+            url: 'api/v2/torrents/removeTags',
+            method: 'post',
+            data: {
+                tags: tags.join(',')
+            }
+        }).send();
+        setTagFilter(TAGS_ALL);
+    };
+
+    startTorrentsByTagFN = function(tagHash) {
+        var hashes = torrentsTable.getFilteredTorrentsHashes('all', CATEGORIES_ALL, tagHash);
+        if (hashes.length) {
+            new Request({
+                url: 'api/v2/torrents/resume',
+                method: 'post',
+                data: {
+                    hashes: hashes.join("|")
+                }
+            }).send();
+            updateMainData();
+        }
+    };
+
+    pauseTorrentsByTagFN = function(tagHash) {
+        var hashes = torrentsTable.getFilteredTorrentsHashes('all', CATEGORIES_ALL, tagHash);
+        if (hashes.length) {
+            new Request({
+                url: 'api/v2/torrents/pause',
+                method: 'post',
+                data: {
+                    hashes: hashes.join("|")
+                }
+            }).send();
+            updateMainData();
+        }
+    };
+
+    deleteTorrentsByTagFN = function(tagHash) {
+        var hashes = torrentsTable.getFilteredTorrentsHashes('all', CATEGORIES_ALL, tagHash);
         if (hashes.length) {
             new MochaUI.Window({
                 id: 'confirmDeletionPage',
